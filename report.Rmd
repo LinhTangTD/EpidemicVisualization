@@ -1,0 +1,163 @@
+---
+title: "Report"
+author: "Linh, Yolanda"
+date: "10/1/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(rpart)
+library(rpart.plot)
+library(vcd)
+```
+
+## Load Data
+
+Loading data from server. Data should be from Dec 19, 2019. Showing first few data in the dataset:
+
+```{r load_data, echo=FALSE, message=FALSE}
+#Pull data from server and select data since Dec 19, 2019
+data <- read_csv("https://www.stat2games.sites.grinnell.edu/data/epidemic/getdata.php")
+```
+
+```{r data_cleaning, echo=FALSE}
+#Filter by date benchmark
+data <- data %>% filter(Level > 0)
+benchmark <- as.Date("2019-12-19")
+data = data %>% filter(Date > benchmark)
+
+#Converting PlayerID and GroupID to lower case
+data$PlayerID <- tolower(data$PlayerID)
+data$GroupID <- tolower(data$GroupID)
+
+#Convering Certain Columns to Factors
+data$TurretType <- as.factor(data$TurretType)
+data$Level <- as.factor(data$Level)
+data$Upgrade <- as.factor(data$Upgrade)
+data$Medicine <- as.factor(data$Medicine)
+data$Virus <- as.factor(data$Virus)
+data$Wave <- as.factor(data$Wave)
+data$Location <- as.factor(data$Location)
+
+#Creating Additional Columns
+data = mutate(data, Killed = 1)
+
+#Tidy data
+destroyed = data[rep(row.names(data), data$Destroyed), ]
+missed = data[rep(row.names(data), data$Shot - data$Destroyed), ]
+missed$Killed = 0
+data = rbind(destroyed, missed)
+
+#Drop unneccesary columns
+data = select(data, -c("Shot", "Destroyed"))
+data = rename(data, Destroyed = Killed)
+
+#Show data
+knitr::kable(data[1:5, ])
+```
+
+## Probabilities
+
+```{r split_by_level, echo=FALSE}
+#Splitting data by level
+level1 <- data %>% filter(Level == "1")
+level2 <- data %>% filter(Level == "2")
+level2B <- data %>% filter(Level == "2B")
+level3 <- data %>% filter(Level == "3")
+```
+
+```{r define_funtion, echo=FALSE}
+# Set attributes for tree model
+method = "anova" #regression tree
+control = rpart.control(cp = -1) #build a fully grown tree
+
+# Function to draw tree out from built model
+draw_tree = function(model, tree_name){
+  rpart.plot(model, main=tree_name, type = 5, extra = 0, branch = .2)
+  rpart.rules(model)
+}
+
+#Function to draw mosaic graph from data by level
+draw_mosaic = function(table, graph_name){
+  mosaic(table, shade = TRUE, main = graph_name)
+}
+```
+
+### Level 1
+
+Explanatory variables: Medicine, Virus
+
+#### Decision Tree
+
+```{r level1_tree, echo=FALSE, warning=FALSE}
+model_level1 = rpart(Destroyed ~ Medicine + Virus, method = method, data = level1, control = control)
+draw_tree(model_level1, "Level 1")
+```
+
+#### Mosaic
+
+```{r level1_mosaic, echo=FALSE, warning=FALSE}
+table1 <- xtabs(Destroyed ~ Medicine + Virus, level1)
+draw_mosaic(table1, "Level 1")
+```
+
+### Level 2
+
+Explanatory variables: Medicine
+
+#### Decision Tree
+
+```{r level2_tree, echo=FALSE, warning=FALSE}
+model_level2 = rpart(Destroyed ~ Medicine, method = method, data = level2, control = control)
+draw_tree(model_level2, "Level 2")
+```
+
+#### Mosaic
+
+```{r level2_mosaic, echo=FALSE, warning=FALSE}
+table2 <- xtabs(Destroyed ~ Medicine, level2)
+draw_mosaic(table2, "Level 2")
+```
+
+### Level 2B (Advanced Mode)
+
+Explanatory variables: TurretType, Medicine
+
+#### Decision Tree
+
+```{r level2B_tree, echo=FALSE, warning=FALSE}
+model_level2B = rpart(Destroyed ~ TurretType + Medicine, method = method, data = level2B, control = control)
+draw_tree(model_level2B, "Level 2B")
+```
+
+#### Mosaic
+
+```{r level2B_mosaic, echo=FALSE, warning=FALSE}
+table2B <- xtabs(Destroyed ~ TurretType + Medicine, level2B)
+draw_mosaic(table2B, "Level 2B")
+```
+
+### Level 3
+
+Explanatory variables: Medicine, Virus
+
+#### Decision Tree
+
+```{r level3_tree, echo=FALSE, warning=FALSE}
+model_level3 = rpart(Destroyed ~ Medicine + Virus, method = method, data = level3, control = control)
+draw_tree(model_level3, "Level 3")
+```
+
+#### Mosaic
+
+```{r level3_mosaic, echo=FALSE, warning=FALSE}
+table3 <- xtabs(Destroyed ~ Medicine + Virus, level3)
+draw_mosaic(table3, "Level 3")
+```
